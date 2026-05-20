@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: tienda-virtual-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://tienda-virtual.onrender.com
+
+  - type: static
+    name: tienda-virtual-frontend
+    runtime: static
+    buildCommand: npm install && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://tienda-virtual-api.onrender.com
