@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useToast } from '../context/ToastContext';
 
 const CurrencyManager = () => {
   const [currencies, setCurrencies] = useState([]);
@@ -12,7 +13,8 @@ const CurrencyManager = () => {
     symbol: ''
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const { success, error: toastError } = useToast();
 
   useEffect(() => {
     fetchCurrencies();
@@ -21,18 +23,26 @@ const CurrencyManager = () => {
   const fetchCurrencies = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/currencies', { headers: { Authorization: token } });
+      const res = await axios.get('/api/currencies', { 
+        headers: { Authorization: token } 
+      });
       setCurrencies(res.data || []);
     } catch (error) {
       console.error('Error fetching currencies:', error);
-      alert('Error al cargar las monedas');
+      toastError('Error al cargar las monedas');
+      // Datos por defecto en caso de error
+      setCurrencies([
+        { currency: 'USD', rate: 1, name: 'Dólar Americano', symbol: '$' },
+        { currency: 'EUR', rate: 0.92, name: 'Euro', symbol: '€' },
+        { currency: 'COP', rate: 4000, name: 'Peso Colombiano', symbol: '$' }
+      ]);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setFormError('');
     
     const token = localStorage.getItem('token');
     const data = {
@@ -47,20 +57,20 @@ const CurrencyManager = () => {
         await axios.put(`/api/currencies/${editingCurrency.currency}`, data, {
           headers: { Authorization: token }
         });
-        alert('✅ Moneda actualizada correctamente');
+        success('✅ Moneda actualizada correctamente');
       } else {
         await axios.post('/api/currencies', data, {
           headers: { Authorization: token }
         });
-        alert('✅ Moneda creada correctamente');
+        success('✅ Moneda creada correctamente');
       }
-      fetchCurrencies();
+      await fetchCurrencies();
       setShowModal(false);
       resetForm();
-    } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Error al guardar';
-      setError(errorMsg);
-      alert(errorMsg);
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Error al guardar';
+      setFormError(errorMsg);
+      toastError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -68,20 +78,20 @@ const CurrencyManager = () => {
 
   const handleDelete = async (currency) => {
     if (currency === 'USD') {
-      alert('❌ No se puede eliminar la moneda base (USD)');
+      toastError('❌ No se puede eliminar la moneda base (USD)');
       return;
     }
     
-    if (confirm(`¿Eliminar la moneda ${currency}?`)) {
+    if (window.confirm(`¿Eliminar la moneda ${currency}?`)) {
       const token = localStorage.getItem('token');
       try {
         await axios.delete(`/api/currencies/${currency}`, {
           headers: { Authorization: token }
         });
-        alert('✅ Moneda eliminada correctamente');
-        fetchCurrencies();
-      } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
+        success('✅ Moneda eliminada correctamente');
+        await fetchCurrencies();
+      } catch (err) {
+        toastError(err.response?.data?.error || 'Error al eliminar');
       }
     }
   };
@@ -105,7 +115,7 @@ const CurrencyManager = () => {
       symbol: ''
     });
     setEditingCurrency(null);
-    setError('');
+    setFormError('');
   };
 
   const getCurrencySymbol = (symbol, currency) => {
@@ -142,37 +152,22 @@ const CurrencyManager = () => {
               <th className="p-3 text-left">Moneda</th>
               <th className="p-3 text-left">Código</th>
               <th className="p-3 text-left">Símbolo</th>
-              <th className="p-3 text-right">Tipo de Cambio (1 USD = ?)</th>
-              <th className="p-3 text-center">Última actualización</th>
+              <th className="p-3 text-right">Tipo de Cambio</th>
               <th className="p-3 text-center">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {currencies.map(currency => (
               <tr key={currency.currency} className="border-b hover:bg-gray-50 transition">
-                <td className="p-3 font-medium">
-                  {currency.name || (
-                    currency.currency === 'USD' ? 'Dólar Americano' :
-                    currency.currency === 'EUR' ? 'Euro' :
-                    currency.currency === 'COP' ? 'Peso Colombiano' :
-                    currency.currency === 'MXN' ? 'Peso Mexicano' :
-                    currency.currency === 'ARS' ? 'Peso Argentino' :
-                    currency.currency === 'CLP' ? 'Peso Chileno' :
-                    currency.currency === 'PEN' ? 'Sol Peruano' :
-                    currency.currency === 'BOB' ? 'Boliviano' : currency.currency
-                  )}
-                </td>
+                <td className="p-3 font-medium">{currency.name || currency.currency}</td>
                 <td className="p-3 font-mono font-bold">{currency.currency}</td>
                 <td className="p-3 text-2xl">{getCurrencySymbol(currency.symbol, currency.currency)}</td>
                 <td className="p-3 text-right font-mono">
                   {currency.currency === 'USD' ? (
                     <span className="text-gray-500">1.0000 (Base)</span>
                   ) : (
-                    <span className="font-medium">{currency.rate.toFixed(4)}</span>
+                    <span className="font-medium">1 USD = {currency.rate?.toFixed(4)} {currency.currency}</span>
                   )}
-                </td>
-                <td className="p-3 text-center text-xs text-gray-500">
-                  {new Date(currency.updated_at).toLocaleString()}
                 </td>
                 <td className="p-3 text-center">
                   <div className="flex gap-2 justify-center">
@@ -193,12 +188,12 @@ const CurrencyManager = () => {
                       </button>
                     )}
                   </div>
-                </td>
-              </tr>
+                 </td>
+               </tr>
             ))}
             {currencies.length === 0 && (
               <tr>
-                <td colSpan="6" className="text-center p-8 text-gray-500">
+                <td colSpan="5" className="text-center p-8 text-gray-500">
                   No hay monedas configuradas
                 </td>
               </tr>
@@ -207,7 +202,7 @@ const CurrencyManager = () => {
         </table>
       </div>
       
-      {/* Modal de creación/edición */}
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-md w-full">
@@ -219,9 +214,9 @@ const CurrencyManager = () => {
                 <button onClick={() => setShowModal(false)} className="text-2xl hover:text-gray-600">&times;</button>
               </div>
               
-              {error && (
+              {formError && (
                 <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
-                  ❌ {error}
+                  ❌ {formError}
                 </div>
               )}
               
@@ -230,22 +225,21 @@ const CurrencyManager = () => {
                   <label className="block text-sm font-medium mb-1">Código de moneda *</label>
                   <input
                     type="text"
-                    className="input uppercase"
+                    className={`input uppercase ${editingCurrency ? 'bg-gray-100 text-gray-600' : ''}`}
                     placeholder="Ej: USD, EUR, COP"
                     value={formData.currency}
                     onChange={(e) => setFormData({...formData, currency: e.target.value})}
                     disabled={!!editingCurrency}
                     required
                   />
-                  <p className="text-xs text-gray-400 mt-1">Código de 3 letras (ISO 4217)</p>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Nombre de la moneda</label>
+                  <label className="block text-sm font-medium mb-1">Nombre</label>
                   <input
                     type="text"
                     className="input"
-                    placeholder="Ej: Dólar Americano, Euro"
+                    placeholder="Ej: Dólar Americano"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
@@ -256,28 +250,24 @@ const CurrencyManager = () => {
                   <input
                     type="text"
                     className="input"
-                    placeholder="Ej: $, €, S/"
+                    placeholder="Ej: $, €"
                     value={formData.symbol}
                     onChange={(e) => setFormData({...formData, symbol: e.target.value})}
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Tipo de cambio (1 USD = ?) *
-                  </label>
+                  <label className="block text-sm font-medium mb-1">Tipo de cambio *</label>
                   <input
                     type="number"
                     step="0.01"
                     className="input"
-                    placeholder="Ej: 1.00, 0.92, 4000"
+                    placeholder="1 USD = ?"
                     value={formData.rate}
                     onChange={(e) => setFormData({...formData, rate: e.target.value})}
                     required
                   />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Cantidad de esta moneda equivalente a 1 USD
-                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Cantidad de esta moneda equivalente a 1 USD</p>
                 </div>
                 
                 <div className="flex gap-3 pt-4">
@@ -293,15 +283,6 @@ const CurrencyManager = () => {
           </div>
         </div>
       )}
-      
-      {/* Información adicional */}
-      <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-        <p className="text-sm text-blue-800 flex items-center gap-2">
-          <span>💡</span>
-          <strong>Nota:</strong> El tipo de cambio determina el valor de cada moneda en relación al USD.
-          La moneda base (USD) no se puede eliminar.
-        </p>
-      </div>
     </div>
   );
 };

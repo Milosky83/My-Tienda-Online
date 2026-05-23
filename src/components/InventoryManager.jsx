@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useToast } from '../context/ToastContext';
 
 const InventoryManager = ({ product, onUpdate, onClose }) => {
   const [movements, setMovements] = useState([]);
@@ -10,20 +11,24 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
     reason: '',
     customReason: ''
   });
+  const { success, error: toastError } = useToast();
 
   useEffect(() => {
-    fetchMovements();
-  }, [product.id]);
+    if (product && product.id) {
+      fetchMovements();
+    }
+  }, [product]);
 
   const fetchMovements = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`/api/inventory-movements?productId=${product.id}`, {
+      const res = await axios.get(`/api/inventory-movements?productId=${product.id}&limit=50`, {
         headers: { Authorization: token }
       });
       setMovements(res.data || []);
     } catch (error) {
       console.error('Error fetching movements:', error);
+      toastError('Error al cargar el historial');
     }
   };
 
@@ -31,13 +36,13 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
     e.preventDefault();
     
     if (!formData.quantity || formData.quantity <= 0) {
-      alert('❌ La cantidad debe ser mayor a 0');
+      toastError('❌ La cantidad debe ser mayor a 0');
       return;
     }
 
     const finalReason = formData.customReason || formData.reason;
     if (!finalReason) {
-      alert('❌ Debes especificar una razón para el movimiento');
+      toastError('❌ Debes especificar una razón para el movimiento');
       return;
     }
 
@@ -53,13 +58,13 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
         headers: { Authorization: token }
       });
       
-      alert(`✅ Inventario actualizado correctamente`);
+      success(`✅ ${formData.type === 'entry' ? 'Entrada' : 'Salida'} registrada correctamente`);
       fetchMovements();
-      onUpdate(); // Actualizar la lista de productos
+      if (onUpdate) onUpdate();
       setFormData({ type: 'entry', quantity: '', reason: '', customReason: '' });
     } catch (error) {
       console.error('Error:', error);
-      alert(error.response?.data?.error || '❌ Error al actualizar inventario');
+      toastError(error.response?.data?.error || '❌ Error al actualizar inventario');
     } finally {
       setLoading(false);
     }
@@ -73,29 +78,9 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
     return type === 'entry' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
   };
 
-  const getReasonBadgeColor = (reason) => {
-    if (!reason) return 'bg-gray-100 text-gray-800';
-    if (reason.includes('Venta') || reason.includes('venta')) return 'bg-red-100 text-red-800';
-    if (reason.includes('Cancelado') || reason.includes('cancelado')) return 'bg-orange-100 text-orange-800';
-    if (reason.includes('Devolución') || reason.includes('devolución')) return 'bg-green-100 text-green-800';
-    if (reason.includes('Compra') || reason.includes('proveedor')) return 'bg-blue-100 text-blue-800';
-    if (reason.includes('Ajuste')) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-gray-100 text-gray-800';
-  };
-
-  const getCurrencySymbol = (currency) => {
-    const symbols = {
-      USD: '$',
-      EUR: '€',
-      COP: '$',
-      MXN: '$',
-      ARS: '$',
-      CLP: '$',
-      PEN: 'S/',
-      BOB: 'Bs'
-    };
-    return symbols[currency] || '$';
-  };
+  if (!product) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -113,12 +98,12 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
               <div>
                 <p className="text-xs text-gray-500">Stock actual</p>
-                <p className="text-2xl font-bold text-blue-600">{product.stock}</p>
+                <p className="text-2xl font-bold text-blue-600">{product.stock || 0}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Precio</p>
                 <p className="text-lg font-bold text-green-600">
-                  {getCurrencySymbol(product.currency || 'USD')}{product.price}
+                  ${product.price} {product.currency || 'USD'}
                 </p>
               </div>
               <div>
@@ -132,7 +117,7 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
             </div>
           </div>
           
-          {/* Formulario de movimiento */}
+          {/* Formulario */}
           <form onSubmit={handleSubmit} className="mb-6">
             <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
               <span>➕</span> Agregar Movimiento
@@ -179,7 +164,6 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
                       <option value="Traslado desde otra sucursal - Entrada">🚚 Traslado desde otra sucursal</option>
                       <option value="Inventario inicial - Entrada">📋 Inventario inicial</option>
                       <option value="Ajuste manual positivo - Entrada">⚙️ Ajuste manual positivo</option>
-                      <option value="Reactivación de pedido - Entrada">🔄 Reactivación de pedido cancelado</option>
                     </>
                   ) : (
                     <>
@@ -188,7 +172,6 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
                       <option value="Merma o pérdida - Salida de stock">⚠️ Merma o pérdida</option>
                       <option value="Traslado a otra sucursal - Salida">🚚 Traslado a otra sucursal</option>
                       <option value="Ajuste manual negativo - Salida">⚙️ Ajuste manual negativo</option>
-                      <option value="Cancelación de pedido - Salida">❌ Cancelación de pedido</option>
                     </>
                   )}
                 </select>
@@ -211,7 +194,10 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
               disabled={loading}
             >
               {loading ? (
-                'Procesando...'
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Procesando...
+                </div>
               ) : (
                 <>
                   {formData.type === 'entry' ? '📥 Agregar Stock' : '📤 Quitar Stock'}
@@ -220,7 +206,7 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
             </button>
           </form>
           
-          {/* Historial de movimientos */}
+          {/* Historial */}
           <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
             <span>📜</span> Historial de Movimientos
           </h3>
@@ -250,11 +236,7 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
                     <td className="p-2 text-center font-bold">{m.quantity}</td>
                     <td className="p-2 text-center">{m.previous_stock}</td>
                     <td className="p-2 text-center font-bold">{m.new_stock}</td>
-                    <td className="p-2">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs ${getReasonBadgeColor(m.reason)}`}>
-                        {m.reason || '-'}
-                      </span>
-                    </td>
+                    <td className="p-2 text-xs">{m.reason || '-'}</td>
                   </tr>
                 ))}
                 {movements.length === 0 && (
@@ -268,16 +250,9 @@ const InventoryManager = ({ product, onUpdate, onClose }) => {
             </table>
           </div>
           
-          {/* Información de notas */}
+          {/* Nota */}
           <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm text-yellow-800">
-            <p className="font-semibold mb-1">💡 Notas importantes:</p>
-            <ul className="list-disc list-inside text-xs space-y-1">
-              <li>Las <strong>entradas</strong> aumentan el stock (compras, devoluciones, ajustes positivos)</li>
-              <li>Las <strong>salidas</strong> disminuyen el stock (ventas, mermas, ajustes negativos)</li>
-              <li>Los pedidos de clientes generan <strong>salidas automáticas</strong> en el inventario</li>
-              <li>Las cancelaciones de pedidos generan <strong>entradas automáticas</strong> (devolución de stock)</li>
-              <li>Registrar una razón clara ayuda al seguimiento del inventario</li>
-            </ul>
+            <p>💡 <strong>Nota:</strong> Los pedidos de clientes generan salidas automáticas. Las cancelaciones generan entradas automáticas.</p>
           </div>
         </div>
       </div>

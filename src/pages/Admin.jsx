@@ -8,8 +8,14 @@ import OfferManager from '../components/OfferManager';
 import ComboManager from '../components/ComboManager';
 import InventoryReport from '../components/InventoryReport';
 import BusinessSettings from '../components/BusinessSettings';
+import CouponManager from '../components/CouponManager';
+import AdvancedDashboard from '../components/AdvancedDashboard';
+import InvoicePrinter from '../components/InvoicePrinter';
+import { useBusiness } from '../context/BusinessContext';
+import UserManager from '../components/UserManager';
 
 const Admin = () => {
+  const { businessInfo } = useBusiness();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -403,24 +409,26 @@ const Admin = () => {
     setShowProductModal(true);
   };
 
-  const handleUpdateOrderStatus = async (orderId, status) => {
-    const token = localStorage.getItem('token');
-    try {
-      const response = await axios.put(`/api/orders/${orderId}/status`, { status }, { 
-        headers: { Authorization: token } 
-      });
-      
-      if (response.data.success) {
-        alert(`✅ Pedido ${status === 'cancelled' ? 'cancelado' : 'actualizado'} correctamente`);
-        fetchOrders();
-        fetchReports();
-        fetchProducts();
-      }
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      alert('❌ Error al actualizar el estado del pedido');
+const handleUpdateOrderStatus = async (orderId, status) => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await axios.put(`/api/orders/${orderId}/status`, { status }, { 
+      headers: { Authorization: token } 
+    });
+    
+    if (response.data.success) {
+      success(`✅ Pedido ${status === 'cancelled' ? 'cancelado' : 'actualizado'} correctamente`);
+      // Refrescar todas las listas afectadas
+      fetchOrders();
+      fetchReports();      // Actualizar reporte de ventas
+      fetchCurrencyReport(); // Actualizar reporte por moneda
+      fetchProducts();      // Actualizar stock de productos
     }
-  };
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    toastError('❌ Error al actualizar el estado del pedido');
+  }
+};
 
   const openEditOrderModal = async (order) => {
     setEditingOrder({ ...order });
@@ -478,68 +486,72 @@ const Admin = () => {
   };
 
   const handleDeleteOrder = async (orderId) => {
-    if (confirm('¿Estás seguro de eliminar este pedido? Esta acción no se puede deshacer y devolverá el stock.')) {
-      const token = localStorage.getItem('token');
-      try {
-        const response = await axios.delete(`/api/orders/${orderId}`, { 
-          headers: { Authorization: token } 
-        });
-        
-        if (response.data.success) {
-          alert('✅ Pedido eliminado correctamente. Stock devuelto.');
-          fetchOrders();
-          fetchReports();
-          fetchProducts();
-        }
-      } catch (error) {
-        console.error('Error deleting order:', error);
-        alert('❌ Error al eliminar el pedido');
-      }
-    }
-  };
-
-  const handleUpdateOrder = async () => {
-    setLoading(true);
+  if (confirm('¿Estás seguro de eliminar este pedido? Esta acción no se puede deshacer y eliminará el pedido permanentemente.')) {
     const token = localStorage.getItem('token');
-    
     try {
-      await axios.put(`/api/orders/${editingOrder.id}`, {
-        sender_name: editingOrder.sender_name,
-        sender_phone: editingOrder.sender_phone,
-        sender_email: editingOrder.sender_email,
-        recipient_name: editingOrder.recipient_name,
-        recipient_phone: editingOrder.recipient_phone,
-        recipient_address: editingOrder.recipient_address,
-        status: editingOrder.status,
-        total: editingOrder.total,
-        payment_method: editingOrder.payment_method,
-        delivery_date: editingOrder.delivery_date,
-        delivery_notes: editingOrder.delivery_notes
-      }, { headers: { Authorization: token } });
-      
-      const itemsToSend = editingOrderItems.map(item => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price: item.price
-      }));
-      
-      await axios.put(`/api/orders/${editingOrder.id}/items`, { items: itemsToSend }, { 
+      const response = await axios.delete(`/api/orders/${orderId}`, { 
         headers: { Authorization: token } 
       });
       
-      alert('✅ Pedido actualizado correctamente');
-      setShowEditOrderModal(false);
-      fetchOrders();
-      fetchReports();
-      fetchProducts();
-      
+      if (response.data.success) {
+        success('✅ Pedido eliminado permanentemente');
+        // Refrescar todas las listas afectadas
+        fetchOrders();
+        fetchReports();      // Actualizar reporte de ventas
+        fetchCurrencyReport(); // Actualizar reporte por moneda
+        fetchProducts();      // Actualizar stock de productos
+      }
     } catch (error) {
-      console.error('Error updating order:', error);
-      alert('❌ Error al actualizar el pedido');
-    } finally {
-      setLoading(false);
+      console.error('Error deleting order:', error);
+      toastError('❌ Error al eliminar el pedido');
     }
-  };
+  }
+};
+
+  const handleUpdateOrder = async () => {
+  setLoading(true);
+  const token = localStorage.getItem('token');
+  
+  try {
+    await axios.put(`/api/orders/${editingOrder.id}`, {
+      sender_name: editingOrder.sender_name,
+      sender_phone: editingOrder.sender_phone,
+      sender_email: editingOrder.sender_email,
+      recipient_name: editingOrder.recipient_name,
+      recipient_phone: editingOrder.recipient_phone,
+      recipient_address: editingOrder.recipient_address,
+      status: editingOrder.status,
+      total: editingOrder.total,
+      payment_method: editingOrder.payment_method,
+      delivery_date: editingOrder.delivery_date,
+      delivery_notes: editingOrder.delivery_notes
+    }, { headers: { Authorization: token } });
+    
+    const itemsToSend = editingOrderItems.map(item => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      price: item.price
+    }));
+    
+    await axios.put(`/api/orders/${editingOrder.id}/items`, { items: itemsToSend }, { 
+      headers: { Authorization: token } 
+    });
+    
+    success('✅ Pedido actualizado correctamente');
+    setShowEditOrderModal(false);
+    // Refrescar todas las listas afectadas
+    fetchOrders();
+    fetchReports();      // Actualizar reporte de ventas
+    fetchCurrencyReport(); // Actualizar reporte por moneda
+    fetchProducts();      // Actualizar stock de productos
+    
+  } catch (error) {
+    console.error('Error updating order:', error);
+    toastError('❌ Error al actualizar el pedido');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getUniqueCategories = () => {
     const categories = reports.map(r => r.category).filter(c => c);
@@ -660,6 +672,30 @@ const Admin = () => {
     doc.save(`reporte_ventas_${new Date().toISOString().slice(0, 19)}.pdf`);
   };
 
+  const exportToExcel = () => {
+    if (!filteredReports || filteredReports.length === 0) {
+      alert('No hay datos para exportar');
+      return;
+    }
+    
+    const excelData = filteredReports.map(item => ({
+      'Producto': item.name,
+      'Categoría': item.category || '-',
+      'Moneda': item.product_currency || 'USD',
+      'Unidades Vendidas': item.total_sold || 0,
+      'Ingresos (Local)': `${getCurrencySymbol(item.product_currency || 'USD')}${(item.total_revenue || 0).toFixed(2)}`,
+      'Ingresos (USD)': `$${(item.total_revenue / (rates.find(r => r.currency === item.product_currency)?.rate || 1)).toFixed(2)}`,
+      'Pedidos': item.total_orders || 0
+    }));
+    
+    import('xlsx').then(XLSX => {
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Reporte de Ventas');
+      XLSX.writeFile(workbook, `reporte_ventas_${new Date().toISOString().slice(0, 19)}.xlsx`);
+    });
+  };
+
   const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
     
@@ -744,112 +780,24 @@ const Admin = () => {
       </div>
       
       <div className="border-b border-gray-200">
-        <div className="flex flex-wrap gap-1">
-          <TabButton id="dashboard" label="Dashboard" icon="📈" />
-          <TabButton id="products" label="Productos" icon="🛍️" />
-          <TabButton id="orders" label="Pedidos" icon="📦" />
-          <TabButton id="sales" label="Reporte de Ventas" icon="📊" />
-          <TabButton id="inventory" label="Inventario" icon="📦" />
-          <TabButton id="combos" label="Combos" icon="🎁" />
-          <TabButton id="offers" label="Ofertas" icon="🎯" />
-          <TabButton id="currencies" label="Monedas" icon="💱" />
-          <TabButton id="business" label="Negocio" icon="🏪" />
-        </div>
-      </div>
+  <div className="flex flex-wrap gap-1">
+    <TabButton id="dashboard" label="Dashboard" icon="📈" />
+    <TabButton id="users" label="Usuarios" icon="👥" />
+    <TabButton id="products" label="Productos" icon="🛍️" />
+    <TabButton id="orders" label="Pedidos" icon="📦" />
+    <TabButton id="sales" label="Reporte de Ventas" icon="📊" />
+    <TabButton id="inventory" label="Inventario" icon="📦" />
+    <TabButton id="combos" label="Combos" icon="🎁" />
+    <TabButton id="offers" label="Ofertas" icon="🎯" />
+    <TabButton id="coupons" label="Cupones" icon="🎫" />
+    <TabButton id="currencies" label="Monedas" icon="💱" />
+    <TabButton id="business" label="Negocio" icon="🏪" />
+  </div>
+</div>
       
-      {/* Dashboard */}
+      {/* Dashboard Avanzado */}
       {activeTab === 'dashboard' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm">Total Productos</p>
-                  <p className="text-3xl font-bold">{products.length}</p>
-                </div>
-                <div className="text-4xl">🛍️</div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm">Pedidos Totales</p>
-                  <p className="text-3xl font-bold">{orders.length}</p>
-                </div>
-                <div className="text-4xl">📦</div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm">Pedidos Pendientes</p>
-                  <p className="text-3xl font-bold text-yellow-600">
-                    {orders.filter(o => o.status === 'pending').length}
-                  </p>
-                </div>
-                <div className="text-4xl">⏳</div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm">Ingresos Totales</p>
-                  <p className="text-3xl font-bold text-emerald-600">
-                    ${reports.reduce((sum, r) => sum + (r.total_revenue || 0), 0).toFixed(2)} USD
-                  </p>
-                </div>
-                <div className="text-4xl">💰</div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold mb-4">🏆 Top 5 Productos Más Vendidos</h3>
-            <div className="space-y-3">
-              {reports.slice(0, 5).map((r, idx) => (
-                <div key={r.id} className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center font-bold text-emerald-600">
-                    {idx + 1}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-sm text-gray-500">{r.category || 'Sin categoría'}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold">{r.total_sold} unidades</div>
-                    <div className="text-sm text-emerald-600">{getCurrencySymbol(r.product_currency || 'USD')}{(r.total_revenue || 0).toFixed(2)}</div>
-                  </div>
-                </div>
-              ))}
-              {reports.length === 0 && (
-                <p className="text-center text-gray-500 py-4">No hay ventas registradas</p>
-              )}
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold mb-4">📋 Últimos 5 Pedidos</h3>
-            <div className="space-y-3">
-              {orders.slice(0, 5).map(order => (
-                <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium">{order.sender_name || order.customer_name}</p>
-                    <p className="text-sm text-gray-500">#{order.id.slice(-6)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-600">{getCurrencySymbol(order.currency || 'USD')}{order.total?.toFixed(2)} {order.currency || 'USD'}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(order.status)}`}>
-                      {getStatusText(order.status)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {orders.length === 0 && (
-                <p className="text-center text-gray-500 py-4">No hay pedidos registrados</p>
-              )}
-            </div>
-          </div>
-        </div>
+        <AdvancedDashboard />
       )}
       
       {/* Productos */}
@@ -885,6 +833,7 @@ const Admin = () => {
                     onClick={() => {
                       setSelectedProductForInventory(p);
                       setShowInventoryModal(true);
+					 console.log("aaa");
                     }} 
                     className="flex-1 bg-emerald-500 text-white px-3 py-2 rounded hover:bg-emerald-600"
                   >
@@ -1139,8 +1088,20 @@ const Admin = () => {
                   <option value="PEN">PEN - Sol Peruano</option>
                   <option value="BOB">BOB - Boliviano</option>
                 </select>
+				 <button 
+      onClick={() => {
+        fetchReports();
+        fetchCurrencyReport();
+      }} 
+      className="btn-secondary text-sm"
+    >
+      🔄 Actualizar reportes
+    </button>
                 <button onClick={() => exportToPDF(filteredReports)} className="btn-primary text-sm">
                   📄 Exportar PDF
+                </button>
+                <button onClick={exportToExcel} className="btn-secondary text-sm">
+                  📊 Exportar Excel
                 </button>
               </div>
             </div>
@@ -1315,7 +1276,7 @@ const Admin = () => {
                     <td className="p-3 text-right text-emerald-700">-</td>
                     <td className="p-3 text-right text-emerald-700">${getTotalSales().toFixed(2)} USD</td>
                     <td className="p-3 text-center">{getTotalOrders()}</td>
-                    <td className="p-3"></td>
+                    <td className="p-3"> </td>
                   </tr>
                 </tfoot>
               </table>
@@ -1349,11 +1310,19 @@ const Admin = () => {
         <OfferManager />
       )}
       
+      {/* Cupones */}
+      {activeTab === 'coupons' && (
+        <CouponManager />
+      )}
+      
       {/* Monedas */}
       {activeTab === 'currencies' && (
         <CurrencyManager />
       )}
-      
+      {/* Users */}
+	  {activeTab === 'users' && (
+  <UserManager />
+)}
       {/* Configuración del Negocio */}
       {activeTab === 'business' && (
         <BusinessSettings />
@@ -1397,7 +1366,11 @@ const Admin = () => {
                 )}
               </div>
               
-              <h3 className="font-bold text-lg mb-3">🛍️ Productos</h3>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold text-lg">🛍️ Productos</h3>
+                <InvoicePrinter order={selectedOrder} items={orderItems} businessInfo={businessInfo} />
+              </div>
+              
               <div className="space-y-2 mb-4">
                 {orderItems.map(item => (
                   <div key={item.id} className="flex items-center gap-3 border-b pb-2">

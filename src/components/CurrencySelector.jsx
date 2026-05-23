@@ -20,7 +20,8 @@ const CurrencySelector = ({ onCurrencyChange, selectedCurrency }) => {
       setCurrencies([
         { currency: 'USD', rate: 1, name: 'Dólar Americano', symbol: '$' },
         { currency: 'EUR', rate: 0.92, name: 'Euro', symbol: '€' },
-        { currency: 'COP', rate: 4000, name: 'Peso Colombiano', symbol: '$' }
+        { currency: 'COP', rate: 4000, name: 'Peso Colombiano', symbol: '$' },
+        { currency: 'MXN', rate: 17.5, name: 'Peso Mexicano', symbol: '$' }
       ]);
     } finally {
       setLoading(false);

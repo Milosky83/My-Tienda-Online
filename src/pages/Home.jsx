@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
-import HeroSection from '../components/HeroSection';
+import FeaturedCarousel from '../components/FeaturedCarousel';
+import SkeletonGrid from '../components/SkeletonGrid';
+import SkeletonCarousel from '../components/SkeletonCarousel';
 import axios from 'axios';
 
 const Home = () => {
@@ -37,32 +39,19 @@ const Home = () => {
     return symbols[currency] || '$';
   };
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="skeleton h-96 rounded-3xl mb-12"></div>
-        <div className="skeleton h-8 w-48 mx-auto mb-6"></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="skeleton h-80 rounded-xl"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto px-4 py-8">
-      <HeroSection />
+      {/* Carrusel de productos destacados */}
+      {loading ? <SkeletonCarousel /> : <FeaturedCarousel />}
       
       {/* Combos Destacados */}
-      {featuredCombos.length > 0 && (
+      {!loading && featuredCombos.length > 0 && (
         <div className="mb-16 animate-fade-in">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent flex items-center gap-2">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
               <span>🎁</span> Combos Especiales
             </h2>
-            <Link to="/combos" className="text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1 group">
+            <Link to="/combos" className="text-emerald-600 hover:text-emerald-800 font-semibold flex items-center gap-1 group">
               Ver todos 
               <span className="group-hover:translate-x-1 transition">→</span>
             </Link>
@@ -70,24 +59,24 @@ const Home = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {featuredCombos.map(combo => (
               <Link key={combo.id} to="/combos" className="block group">
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-2 border-purple-100">
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-2 border-emerald-100">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="text-xl font-bold text-purple-800">{combo.name}</h3>
+                      <h3 className="text-xl font-bold text-emerald-800">{combo.name}</h3>
                       <p className="text-sm text-gray-600 mt-1">{combo.description}</p>
                     </div>
-                    <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 rounded-full text-xs font-bold">
+                    <span className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-3 py-1 rounded-full text-xs font-bold">
                       COMBO
                     </span>
                   </div>
                   <div className="flex justify-between items-center mt-4">
                     <div>
                       <p className="text-sm text-gray-500">{combo.products?.length || 0} productos incluidos</p>
-                      <p className="text-2xl font-bold text-green-600">
+                      <p className="text-2xl font-bold text-emerald-600">
                         {getCurrencySymbol(combo.currency)}{combo.total_price?.toFixed(2)}
                       </p>
                     </div>
-                    <span className="text-purple-600 font-semibold group-hover:translate-x-1 transition">Ver combo →</span>
+                    <span className="text-emerald-600 font-semibold group-hover:translate-x-1 transition">Ver combo →</span>
                   </div>
                 </div>
               </Link>
@@ -97,7 +86,7 @@ const Home = () => {
       )}
 
       {/* Productos Destacados */}
-      {featuredProducts.length > 0 && (
+      {!loading && featuredProducts.length > 0 && (
         <div className="mb-16 animate-fade-in">
           <h2 className="text-3xl font-bold text-center mb-8 flex items-center justify-center gap-2">
             <span>⭐</span> Productos Destacados
@@ -111,7 +100,7 @@ const Home = () => {
       )}
 
       {/* Más Vendidos */}
-      {bestSellers.length > 0 && (
+      {!loading && bestSellers.length > 0 && (
         <div className="mb-16 animate-fade-in">
           <h2 className="text-3xl font-bold text-center mb-8 flex items-center justify-center gap-2">
             <span>🔥</span> Los Más Vendidos
@@ -124,15 +113,37 @@ const Home = () => {
         </div>
       )}
       
+      {/* Loading skeletons */}
+      {loading && (
+        <>
+          <div className="mb-16">
+            <div className="h-8 bg-gray-200 rounded w-48 mx-auto mb-6 animate-pulse"></div>
+            <SkeletonGrid count={8} />
+          </div>
+        </>
+      )}
+      
       {/* Banner de suscripción */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-8 text-center text-white animate-fade-in">
-        <h3 className="text-2xl font-bold mb-2">📧 ¡No te pierdas las mejores ofertas!</h3>
-        <p className="text-gray-300 mb-4">Suscríbete para recibir descuentos exclusivos</p>
-        <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-          <input type="email" placeholder="Tu correo electrónico" className="input bg-white text-gray-900" />
-          <button className="btn-primary whitespace-nowrap">Suscribirme</button>
+      {!loading && (
+        <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-8 text-center text-white animate-fade-in">
+          <h3 className="text-2xl font-bold mb-2">📧 ¡No te pierdas las mejores ofertas!</h3>
+          <p className="text-gray-300 mb-4">Suscríbete para recibir descuentos exclusivos</p>
+          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <input type="email" placeholder="Tu correo electrónico" className="input bg-white text-gray-900" />
+            <button className="btn-primary whitespace-nowrap">Suscribirme</button>
+          </div>
         </div>
-      </div>
+      )}
+      
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };

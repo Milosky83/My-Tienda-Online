@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useToast } from '../context/ToastContext';
 
 const Combos = () => {
   const [combos, setCombos] = useState([]);
   const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
+  const { success, error: toastError } = useToast();
 
   useEffect(() => {
     fetchCombos();
@@ -19,6 +21,7 @@ const Combos = () => {
       setCombos(response.data);
     } catch (error) {
       console.error('Error fetching combos:', error);
+      toastError('Error al cargar los combos');
     } finally {
       setLoading(false);
     }
@@ -36,10 +39,11 @@ const Combos = () => {
     });
     
     if (!hasStock) {
-      alert(`❌ No hay suficiente stock para el combo:\n${outOfStockProducts.join('\n')}`);
+      toastError(`❌ No hay suficiente stock:\n${outOfStockProducts.join('\n')}`);
       return;
     }
     
+    // Agregar cada producto al carrito con la cantidad del combo
     combo.products.forEach(product => {
       const productToAdd = {
         id: product.product_id,
@@ -50,15 +54,13 @@ const Combos = () => {
         image: product.image,
         stock: product.stock,
         combo_id: combo.id,
-        combo_name: combo.name,
-        combo_quantity: product.quantity,
-        is_from_combo: true
+        combo_name: combo.name
       };
       
       addToCart(productToAdd, product.quantity);
     });
     
-    alert(`✅ Combo "${combo.name}" agregado al carrito!\nSe agregaron ${combo.products.reduce((sum, p) => sum + p.quantity, 0)} productos.`);
+    success(`✅ Combo "${combo.name}" agregado al carrito!`);
   };
 
   const getCurrencySymbol = (currency) => {
@@ -111,7 +113,7 @@ const Combos = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {combos.map(combo => (
             <div key={combo.id} className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-emerald-200 hover:shadow-xl transition-all duration-300">
-              {/* Header del combo - Verde */}
+              {/* Header del combo */}
               <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5">
                 <div className="flex justify-between items-start">
                   <div>

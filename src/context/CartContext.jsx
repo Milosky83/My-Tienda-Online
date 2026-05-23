@@ -5,18 +5,24 @@ const CartContext = createContext();
 
 export const useCart = () => useContext(CartContext);
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [total, setTotal] = useState(0);
   const [currency, setCurrency] = useState('USD');
-  const [exchangeRates, setExchangeRates] = useState({ USD: 1 });
+  const [exchangeRates, setExchangeRates] = useState({});
   const [displayCurrency, setDisplayCurrency] = useState('USD');
 
   useEffect(() => {
     const savedCart = localStorage.getItem('cart');
     const savedCurrency = localStorage.getItem('currency');
     if (savedCart) {
-      setCart(JSON.parse(savedCart));
+      try {
+        setCart(JSON.parse(savedCart));
+      } catch (e) {
+        console.error('Error parsing cart:', e);
+      }
     }
     if (savedCurrency) {
       setCurrency(savedCurrency);
@@ -26,7 +32,11 @@ export const CartProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
+    if (cart.length > 0) {
+      localStorage.setItem('cart', JSON.stringify(cart));
+    } else {
+      localStorage.removeItem('cart');
+    }
     calculateTotal();
   }, [cart]);
 
@@ -37,7 +47,7 @@ export const CartProvider = ({ children }) => {
 
   const fetchExchangeRates = async () => {
     try {
-      const res = await axios.get('/api/exchange-rates');
+      const res = await axios.get(`${API_URL}/api/exchange-rates`);
       const rates = {};
       res.data.forEach(rate => {
         rates[rate.currency] = rate.rate;
@@ -45,25 +55,18 @@ export const CartProvider = ({ children }) => {
       setExchangeRates(rates);
     } catch (error) {
       console.error('Error fetching exchange rates:', error);
+      // Tasas por defecto
+      setExchangeRates({ USD: 1, EUR: 0.92, COP: 4000, MXN: 17.5 });
     }
   };
 
   const calculateTotal = () => {
     const newTotal = cart.reduce((sum, item) => {
-      const itemTotal = item.price * item.quantity;
-      // Convertir a la moneda seleccionada
+      const itemTotal = (item.price || 0) * (item.quantity || 0);
       const rate = exchangeRates[currency] || 1;
-      const convertedTotal = itemTotal / rate;
-      return sum + convertedTotal;
+      return sum + (itemTotal / rate);
     }, 0);
     setTotal(newTotal);
-  };
-
-  const convertPrice = (price, fromCurrency = 'USD') => {
-    const fromRate = exchangeRates[fromCurrency] || 1;
-    const toRate = exchangeRates[displayCurrency] || 1;
-    const priceInUSD = price / fromRate;
-    return priceInUSD * toRate;
   };
 
   const addToCart = (product, quantity = 1) => {
@@ -72,11 +75,16 @@ export const CartProvider = ({ children }) => {
       if (existingItem) {
         return prevCart.map(item =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
+            ? { ...item, quantity: (item.quantity || 0) + quantity }
             : item
         );
       }
-      return [...prevCart, { ...product, quantity, original_currency: product.currency || 'USD' }];
+      return [...prevCart, { 
+        ...product, 
+        quantity,
+        price: product.price || 0,
+        id: product.id || Date.now().toString()
+      }];
     });
   };
 
@@ -107,48 +115,16 @@ export const CartProvider = ({ children }) => {
 
   const getCurrencySymbol = (curr = displayCurrency) => {
     const symbols = {
-      USD: '$',
-      EUR: '€',
-      COP: '$',
-      MXN: '$',
-      ARS: '$',
-      CLP: '$',
-      PEN: 'S/',
-      BOB: 'Bs'
+      USD: '$', EUR: '€', COP: '$', MXN: '$', ARS: '$', CLP: '$', PEN: 'S/', BOB: 'Bs'
     };
-    return symbols[curr] || '$';
+    return symbols[curr] || curr;
   };
 
-  const sendOrder = async (customerInfo) => {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('Debes iniciar sesión');
-    
-    // Convertir total a USD para guardar en la base de datos
-    const rate = exchangeRates[displayCurrency] || 1;
-    const totalInUSD = total * rate;
-    
-    const response = await axios.post('/api/orders', {
-      products: cart.map(item => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        original_price: item.original_price,
-        currency: item.original_currency || 'USD'
-      })),
-      total: totalInUSD,
-      currency: 'USD',
-      customerInfo
-    }, {
-      headers: { Authorization: token }
-    });
-    
-    // Crear mensaje de WhatsApp con la moneda seleccionada
-    const message = `NUEVO PEDIDO\nMoneda: ${displayCurrency}\nTotal: ${getCurrencySymbol()}${total.toFixed(2)}\n\nCliente: ${customerInfo.name}\nTel: ${customerInfo.phone}\nDir: ${customerInfo.address}\n\nProductos:\n${cart.map(p => `- ${p.name} x${p.quantity} = ${getCurrencySymbol()}${(convertPrice(p.price, p.original_currency) * p.quantity).toFixed(2)}`).join('\n')}`;
-    
-    window.open(`https://wa.me/1234567890?text=${encodeURIComponent(message)}`, '_blank');
-    clearCart();
-    return response.data;
+  const convertPrice = (price, fromCurrency = 'USD') => {
+    const fromRate = exchangeRates[fromCurrency] || 1;
+    const toRate = exchangeRates[displayCurrency] || 1;
+    const priceInUSD = price / fromRate;
+    return priceInUSD * toRate;
   };
 
   return (
@@ -160,10 +136,10 @@ export const CartProvider = ({ children }) => {
       removeFromCart,
       updateQuantity,
       clearCart,
-      sendOrder,
       changeCurrency,
       getCurrencySymbol,
-      convertPrice
+      convertPrice,
+      exchangeRates
     }}>
       {children}
     </CartContext.Provider>
